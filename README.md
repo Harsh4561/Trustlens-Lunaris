@@ -1,91 +1,37 @@
-# TrustLens: Message & Communication Threat Engine (SIH 2026)
+# VoiceGuard
 
-> **SIH Problem Statement:** SIH26106 — AI Email Threat + Forensics  
-> **Role:** Message / Communication Threat Detection Module for TrustLens  
-> **Architecture:** Rule-Based, High-Reliability, Deterministic Microservice (FastAPI)
+VoiceGuard is a local web prototype for classifying uploaded or recorded speech as likely human or AI-generated. It uses a FastAPI audio-processing pipeline and a React/Vite dashboard.
 
----
+## What is implemented
 
-## 1. Overview & Architecture
+- Upload and browser microphone recording (WAV, MP3, M4A, FLAC, OGG, WebM, and Opus)
+- API validation, decoding, mono conversion, resampling, silence trimming, normalization, feature extraction, and technical metadata
+- Real inference through `HyperMoon/wav2vec2-base-960h-finetuned-deepfake`, an ASVspoof2019-trained Wav2Vec2 audio-classification checkpoint
+- Probabilistic classification, confidence, risk score, evidence indicators, warnings, and a non-definitive-result disclaimer
+- Health, model-info, configuration, live-analysis, and demo endpoints
 
-TrustLens is a multimodal digital trust platform combining three threat detection modules:
-1. **Message & Communication Threat Engine** *(This module — SIH26106)*
-2. **Document Authenticity Detection** *(SIH26188)*
-3. **Voice Deepfake Detection** *(SIH26104)*
+## Run locally
 
-These modules connect to the central **Trust Engine** (developed by Harsh) to correlate threats into unified incident assessments:
-```
-Fake SMS ➔ Fake Document ➔ AI-Cloned Voice Call ➔ Trust Engine ➔ Multi-Modal Impersonation Attack Detected
-```
+Use two terminals:
 
-### Why Rule-Based?
-In high-stakes fraud detection and live hackathon demonstrations, statistical ML models often suffer from unpredictable hallucinations, latency, and false positives. This engine relies on **deterministic, fully explainable security rules** that execute in under 20 milliseconds and provide clear human-readable evidence.
-
----
-
-## 2. Detection Checks Implemented
-
-| Check | Target Threat | Rules & Heuristics |
-| :--- | :--- | :--- |
-| **Sender & Domain Mismatch** | Smishing / Email Spoofing | • Rejects bank alerts from personal 10-digit mobile numbers.<br>• Rejects bank alerts from public emails (`@gmail.com`).<br>• Validates domains against authorized registries (`sbi.co.in`).<br>• Normalizes TRAI SMS headers (`VM-SBIBNK` ➔ `SBIBNK`). |
-| **URL & Typosquatting** | Lookalike Phishing Portals | • Levenshtein edit distance detection (`sbl.co.in` vs `sbi.co.in`).<br>• Brand keyword embedding (`sbi-update.xyz`).<br>• IP-based URLs (`http://192.168.1.10/verify`).<br>• Disposable/high-abuse TLDs (`.xyz`, `.top`, `.tk`).<br>• Obfuscated shorteners (`bit.ly`). |
-| **Urgency & Manipulation** | Psychological Pressure | • Detects urgency keywords ("act now", "within 24 hours", "account blocked").<br>• Detects alarmist punctuation (`!!!`) and aggressive capitalization. |
-| **OTP & Credential Harvesting** | Credential Theft / KYC Phishing | • Detects active requests to submit OTPs, PINs, passwords, or KYC.<br>• **Safety Filter:** Distinguishes educational warnings ("Never share your OTP") from attacks. |
-
----
-
-## 3. Shared TrustLens API Contract
-
-### Request Endpoint: `POST /analyze-message`
-
-#### Request Body (`application/json`)
-```json
-{
-  "sender": "+919876543210",
-  "body": "Dear SBI Customer, your YONO account has been suspended due to pending KYC! Verify immediately within 24 hours. Click to update KYC and enter your OTP: http://sbi-kyc-update.xyz/verify",
-  "subject": null,
-  "links": []
-}
-```
-
-#### Response Body (`application/json`)
-```json
-{
-  "risk_score": 100,
-  "verdict": "HIGH_RISK",
-  "evidence": [
-    "Personal number alert: Message claims to be from State Bank of India (SBI), but was sent from a regular phone number (+919876543210) instead of a registered bank header.",
-    "High-risk Top-Level Domain (TLD): Domain 'sbi-kyc-update.xyz' uses '.xyz', which is frequently associated with disposable phishing sites.",
-    "Brand impersonation in link: Domain 'sbi-kyc-update.xyz' incorporates the brand name 'sbi' without matching the authorized domain.",
-    "Message uses urgent, pressuring language designed to induce panic ('verify immediately', 'within 24 hours', 'account has been suspended').",
-    "Credential harvesting detected: Message actively prompts the user to provide sensitive information (OTP (One-Time Password), KYC Verification)."
-  ],
-  "claimed_org": "SBI"
-}
-```
-
-> **Entity Resolution Notice:** Harsh's Trust Engine reads `claimed_org` to match against the organization identified by the Document and Voice modules.
-
----
-
-## 4. How to Run & Test
-
-### Activate Environment
-Open PowerShell in the project directory:
 ```powershell
-cd "C:\Users\SAI COMPUTERS\message-threat-engine"
-.\venv\Scripts\Activate.ps1
+cd backend
+.\venv\Scripts\python.exe -m pip install -r requirements.txt
+.\venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
 ```
 
-### Run Automated Tests
 ```powershell
-.\venv\Scripts\pytest.exe
+cd frontend
+npm.cmd install
+npm.cmd run dev
 ```
-*(All 26 tests verify unit checks and end-to-end demo scenarios.)*
 
-### Launch Microservice Server
-```powershell
-.\venv\Scripts\uvicorn.exe app.main:app --reload --port 8000
-```
-* **API Documentation:** Visit `http://127.0.0.1:8000/docs` in any browser to test interactively using Swagger UI.
-* **Health Check:** `http://127.0.0.1:8000/health`
+Open `http://localhost:5173`. The first backend startup downloads the model; it requires an internet connection and can take a few minutes.
+
+## Demo audio
+
+Add legally obtained WAV files to `backend/demo_audio` named `real_human.wav` and `ai_generated.wav`. They are served and analyzed through the same API path as every upload. No fixed result is returned for a demo clip.
+
+## Important limitation
+
+This checkpoint was trained on ASVspoof-style synthetic-speech data. It is a research model, not proof that an audio sample is synthetic or authentic. Use its output as a screening signal and retain the shown warnings, model status, and disclaimer when presenting results.
